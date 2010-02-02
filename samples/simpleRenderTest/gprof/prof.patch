@@ -1,0 +1,109 @@
+--- prof.c.ori   2008-12-09 14:44:50.000000000 +0100 
++++ prof.c   2008-12-09 15:06:09.000000000 +0100 
+@@ -26,12 +26,19 @@ 
+ /** gmon.out file header */ 
+ struct gmonhdr 
+ { 
++        char cookie[4]; 
++        char version[4]; 
++        char spare[3*4]; 
++}; 
++ 
++struct gmonhisthdr 
++{ 
+         int lpc;        /* lowest pc address */ 
+         int hpc;        /* highest pc address */ 
+         int ncnt;       /* size of samples + size of header */ 
+-        int version;    /* version number */ 
+         int profrate;   /* profiling clock rate */ 
+-        int resv[3];    /* reserved */ 
++        char dimension[15]; 
++        char abbrev; 
+ }; 
+  
+ /** frompc -> selfpc graph */ 
+@@ -55,7 +62,7 @@ 
+         struct rawarc *arcs; 
+  
+         int nsamples; 
+-        unsigned int *samples; 
++        unsigned short int *samples; 
+  
+         int timer; 
+          
+@@ -110,7 +117,7 @@ 
+         } 
+  
+         gp.nsamples = (gp.textsize + gp.hashfraction - 1) / gp.hashfraction; 
+-        gp.samples = (unsigned int *)malloc(sizeof(unsigned int) * gp.nsamples); 
++        gp.samples = (unsigned short int *)malloc(sizeof(unsigned short int) * gp.nsamples); 
+         if (gp.samples == NULL) 
+         { 
+                 free(gp.arcs); 
+@@ -120,7 +127,7 @@ 
+         } 
+  
+         memset((void *)gp.arcs, '\0', gp.narcs * (sizeof(struct rawarc))); 
+-        memset((void *)gp.samples, '\0', gp.nsamples * (sizeof(unsigned int ))); 
++        memset((void *)gp.samples, '\0', gp.nsamples * (sizeof(unsigned short int ))); 
+  
+         gp.timer = sceKernelCreateVTimer("gprof timer", NULL); 
+  
+@@ -161,6 +168,7 @@ 
+         FILE *fp; 
+         int i; 
+         struct gmonhdr hdr; 
++        struct gmonhisthdr histhdr; 
+  
+         if (gp.state != GMON_PROF_ON) 
+         { 
+@@ -174,21 +182,29 @@ 
+         sceKernelStopVTimer(gp.timer); 
+  
+         fp = fopen("gmon.out", "wb"); 
+-        hdr.lpc = gp.lowpc; 
+-        hdr.hpc = gp.highpc; 
+-        hdr.ncnt = sizeof(hdr) + (sizeof(unsigned int) * gp.nsamples); 
+-        hdr.version = GMONVERSION; 
+-        hdr.profrate = SAMPLE_FREQ; 
+-        hdr.resv[0] = 0; 
+-        hdr.resv[1] = 0; 
+-        hdr.resv[2] = 0; 
++ 
++        memset(&hdr, 0x00, sizeof(hdr)); 
++        memcpy(hdr.cookie, "gmon", 4); 
++        hdr.version[0]=1; 
+         fwrite(&hdr, 1, sizeof(hdr), fp); 
+-        fwrite(gp.samples, gp.nsamples, sizeof(unsigned int), fp); 
++ 
++        fputc(0x00, fp);    /* GMON_TAG_TIME_HIST */ 
++        memset(&histhdr, 0x00, sizeof(histhdr)); 
++        histhdr.lpc = gp.lowpc - gp.lowpc; 
++        histhdr.hpc = gp.highpc - gp.lowpc; 
++        histhdr.ncnt = gp.nsamples; 
++        histhdr.profrate = SAMPLE_FREQ; 
++        strcpy(histhdr.dimension, "seconds"); 
++        histhdr.abbrev = 's'; 
++        fwrite(&histhdr, 1, sizeof(histhdr), fp); 
++        fwrite(gp.samples, gp.nsamples, sizeof(unsigned short int), fp); 
++ 
+  
+         for (i=0; i<gp.narcs; i++) 
+         { 
+                 if (gp.arcs[i].count > 0) 
+                 { 
++                        fputc(0x01, fp);    /* GMON_TAG_CG_ARC */ 
+                         fwrite(gp.arcs + i, sizeof(struct rawarc), 1, fp); 
+                 } 
+         } 
+@@ -230,8 +246,8 @@ 
+                 gp.pc = selfpc; 
+                 e = (frompc - gp.lowpc) / gp.hashfraction; 
+                 arc = gp.arcs + e; 
+-                arc->frompc = frompc; 
+-                arc->selfpc = selfpc; 
++                arc->frompc = frompc - gp.lowpc; 
++                arc->selfpc = selfpc - gp.lowpc; 
+                 arc->count++; 
+         } 
+ }

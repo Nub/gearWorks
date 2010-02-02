@@ -1,0 +1,3 @@
+Put files in your psp sdk
+
+/usr/local/pspdev/psp/sdk/

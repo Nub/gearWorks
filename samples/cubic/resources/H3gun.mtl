@@ -1,0 +1,13 @@
+# Blender3D MTL File: H3gun.blend
+# Material Count: 1
+newmtl Grey_H3.png.001_H3.pn_H3.png
+Ns 207.843137
+Ka 0.000000 0.000000 0.000000
+Kd 0.387664 0.387664 0.387664
+Ks 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd H3.png
+
+
